@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Apoorv's Notes</title>
+    <meta name="author" content="Apoorv Khurasia" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans|Roboto+Slab" rel="stylesheet">
+    <link href="./css/main.css" rel="stylesheet" type="text/css" />
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({ showProcessingMessages: false, tex2jax: { inlineMath: [['$','$']] } });
+    </script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_CHTML"></script>
+    <script type="text/javascript" src="./lib/main.js"></script>
+    <script type="text/javascript" src="./lib/jquery-3.1.0.min.js"></script>
+    <script type="text/javascript" src="./lib/markdown.min.js"></script>
+    <script>
+        var State = {
+            TOPICS: "topics",
+            TABLE_OF_CONTENTS: "table-of-contents",
+            CHAPTER_DISPLAY_BUT_NOT_EDIT: "chapter-no-edit",
+            CHAPTER_EDIT: "chapter-edit",
+            CHAPTER_EDIT_FINISHED: "chapter-edit-finished",
+            CHAPTER_EDIT_IN_PROGRSS: "chapter-edit-in-progress"
+        };
+
+        var errorDetailsVisible = false;
+        var currentTopic = null;
+        var currentChapter = null;
+
+        $(document).ready(function() {
+            state(State.TOPICS);
+            var topicParam = getParameterByName("topic");
+            var chapterParam = getParameterByName("chapter");
+            var editParam = getParameterByName("edit");
+
+            if (chapterParam) {
+                downloadAndDisplayChapter(chapterParam, editParam && (editParam === "true"), true);
+            } else if (topicParam) {
+                downloadAndDisplayChapters(topicParam);
+            } else {
+                navToTopicList();
+            }
+        });
+
+        //Navigation Methods
+        function navToTopicList() {
+            httpGetAsync("__NORMAL_BASE_URL__/server/reslookup.php",
+                function(data) {
+                    var topicListResp = JSON.parse(data);
+                    var topicListElem = document.createElement("ul");
+                    jQuery.each(topicListResp["topics"], function(index, topic) {
+                        var topicElem = document.createElement("li");
+                        topicElem.appendChild(createLinkWithOnClick(topic.displayName, function() {
+                            downloadAndDisplayChapters(topic.links["get_chapters"]);
+                        }));
+                        topicListElem.appendChild(topicElem);
+                    });
+
+                    var newTopicCreateForm = document.createElement("li");
+
+                    var newTopicNameLabel = document.createElement("label");
+                    newTopicNameLabel.setAttribute("for", "newTopicName");
+                    newTopicNameLabel.appendChild(document.createTextNode("Create a new topic with name: "));
+                    newTopicCreateForm.appendChild(newTopicNameLabel);
+
+                    var newTopicNameInput = document.createElement("input");
+                    newTopicNameInput.setAttribute("id", "newTopicName");
+                    newTopicNameInput.setAttribute("name", "newTopicName");
+                    newTopicCreateForm.appendChild(newTopicNameInput);
+
+                    var createNewTopicBtn = document.createElement("button");
+                    createNewTopicBtn.appendChild(document.createTextNode("Create"));
+                    createNewTopicBtn.onclick = function() {
+                        var form = {
+                            topicName: newTopicNameInput.value
+                        };
+
+                        createNewTopicBtn.setAttribute("disabled", true);
+
+                        var request = $.ajax({
+                            url: "__ADMIN_BASE_URL__/server/admin/insertTopic.php",
+                            type: "post",
+                            data: form
+                        });
+
+                        request.done(function(response, textStatus, jqXHR) {
+                            console.log("Successfully created a new topic chapter.");
+                            displayChapters(response);
+                        });
+
+                        request.fail(function(response, textStatus, jqXHR) {
+                            console.log("Topic posting failed.");
+                            state(State.ERROR, "Status: " + textStatus + "\n. Response from server:\n" + response);
+                        });
+
+                        request.always(function() {
+                            createNewTopicBtn.setAttribute("disabled", false);
+                        });
+                    };
+
+                    newTopicCreateForm.appendChild(createNewTopicBtn);
+                    topicListElem.appendChild(newTopicCreateForm);
+                    appendAsOnlyChild("#topics", topicListElem);
+                    $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                    state(State.TOPICS);
+                },
+                function(errResp) {
+                    $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                    state(State.ERROR, "Error retrieving list of topics. Response from __NORMAL_BASE_URL__/server/reslookup.php:\n" + errResp);
+                });
+        }
+
+        function downloadAndDisplayChapters(topicChapterLink) {
+            //Clear content previously displayed
+            clearChapterContent();
+
+            httpGetAsync(topicChapterLink, function(data) {
+                var response = JSON.parse(data);
+                displayChapters(response);
+            }, function(errResponse) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                state(State.ERROR, "Error retrieving list of chapters. Response from " + topicChapterLink + ":\n" + errResponse);
+            });
+        }
+
+        function displayChapters(topicResponse) {
+            currentTopic = topicResponse.topic;
+            currentChapter = null;
+
+            var topicName = currentTopic.displayName;
+            var topicKey = currentTopic.topicKey;
+
+            var chapterList = topicResponse.chapters;
+            updateTableOfContents(topicResponse.topic, chapterList);
+            state(State.TABLE_OF_CONTENTS);
+        }
+
+        function downloadAndDisplayChapter(url, edit = false, updateTOC = false) {
+            httpGetAsync(url, function(data) {
+                var response = JSON.parse(data);
+                displayChapter(response, edit, updateTOC);
+            }, function(errResp) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                state(State.ERROR, "Error retrieving chapter contents. Response from " + url + ":\n" + errResp);
+            });
+        }
+
+        function displayChapter(response, edit = false, updateTOC = false) {
+            currentChapter = response.chapter;
+            currentTopic = response.chapter.topic;
+            chapterName.value = currentChapter.displayName;
+            var content = response.content;
+            $("#markdownInput").val(content);
+            render();
+            if (!edit) {
+                state(State.CHAPTER_DISPLAY_BUT_NOT_EDIT);
+            } else {
+                state(State.CHAPTER_EDIT);
+            }
+
+            if (updateTOC) {
+                updateTableOfContents(response.chapter.topic, response.allChapters);
+            }
+        }
+
+        function appendChapter() {
+            currentChapter = null;
+            clearChapterContent();
+            state(State.CHAPTER_EDIT);
+        }
+
+        //End: Navigation Methods
+
+        //Helper Methods
+
+        function updateTableOfContents(topic, chapterList) {
+            console.log(JSON.stringify(topic));
+            appendAsOnlyChild("#heading", document.createTextNode("Apoorv's Notes on " + topic.displayName));
+
+            var chapterListElems = document.createElement("ol");
+            jQuery.each(chapterList, function(index, chapter) {
+                console.log(JSON.stringify(chapter));
+                var liElem = document.createElement("li");
+                liElem.appendChild(createLinkWithOnClick(chapter.displayName, function() {
+                    downloadAndDisplayChapter(chapter.links["get_content"]);
+                }));
+                chapterListElems.appendChild(liElem);
+            });
+
+            var appendNewChapterElem = document.createElement("li");
+            appendNewChapterElem.appendChild(createLinkWithOnClick("Append", function() {
+                appendChapter();
+            }));
+            appendNewChapterElem.appendChild(document.createTextNode(" a new chapter on this topic."));
+            chapterListElems.appendChild(appendNewChapterElem);
+
+            appendAsOnlyChild("#chapters", chapterListElems);
+        }
+
+        function showEditor() {
+            $("#editor").show();
+            $("#editLink").hide();
+            if (currentChapter) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]) + "&edit=true");
+            }
+        }
+
+        function hideEditor() {
+            $("#editor").hide();
+            $("#editLink").show();
+            if (currentChapter) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]));
+            }
+        }
+
+        function render() {
+            var markdownInput = document.getElementById("markdownInput");
+            var parsedHTML = markdown.toHTML($("#markdownInput").val());
+            $("#parsedMarkdown").html(parsedHTML);
+            Preview.Update();
+        }
+
+        function increaseInputFontSize() {
+            var currFontSize = parseInt($('#markdownInput').css("font-size").replace("px", ""));
+            $('#markdownInput').css("font-size", (currFontSize + 1) + "px");
+        }
+
+        function decreaseInputFontSize() {
+            var currFontSize = parseInt($('#markdownInput').css("font-size").replace("px", ""));
+            $('#markdownInput').css("font-size", (currFontSize - 1) + "px");
+        }
+
+        function upsertChapter() {
+            var form = {
+                markdown: markdownInput.value,
+                topicKey: currentTopic.topicKey,
+                chapterName: chapterName.value
+            };
+
+            if (currentChapter) {
+                form.chapterKey = currentChapter.chapterKey;
+            }
+
+            state(State.CHAPTER_EDIT_IN_PROGRSS);
+
+            var request = $.ajax({
+                url: "__ADMIN_BASE_URL__/server/admin/insert.php",
+                type: "post",
+                data: form
+            });
+
+            request.done(function(response, textStatus, jqXHR) {
+                console.log("Successfully posted chapter.");
+                displayChapter(response, false, true);
+            });
+
+            request.fail(function(response, textStatus, jqXHR) {
+                console.log(response);
+                state(State.ERROR, "Chapter posting failed.\n" + response);
+            });
+
+            request.always(function() {
+                state(State.CHAPTER_EDIT_FINISHED);
+            });
+        }
+
+        function cancelEditChapter() {
+            //Whenever we next go into edit mode; we will enable these buttons
+            $("#finishEdit").prop('disabled', true);
+            $("#cancelEdit").prop('disabled', true);
+            if (currentChapter) {
+                downloadAndDisplayChapter(currentChapter.links["get_content"]);
+            } else if (currentTopic) {
+                downloadAndDisplayChapters(currentTopic.links["get_chapters"]);
+            } else {
+                navToTopicList();
+            }
+        }
+
+        function toggleErrorMsgDetails() {
+            if (errorDetailsVisible === false) {
+                $("#errorDetails").hide();
+                $("#showHideErrLink").text("Show Technical Details");
+                errorDetailsVisible = true;
+            } else {
+                $("#errorDetails").show();
+                $("#showHideErrLink").text("Hide Technical Details");
+                errorDetailsVisible = false;
+            }
+        }
+
+        function state(state, errorTechDetails = "No technical details available.") {
+            switch (state) {
+                case State.TOPICS:
+                    $("#allTopics").show();
+                    $("#topicContent").hide();
+                    $("#error").hide();
+                    break;
+                case State.TABLE_OF_CONTENTS:
+                    $("#chapterContent").hide();
+                    $("#allTopics").hide();
+                    $("#topicContent").show();
+                    $("#error").hide();
+                    break;
+                case State.CHAPTER_DISPLAY_BUT_NOT_EDIT:
+                    $("#allTopics").hide();
+                    $("#chapterContent").show();
+                    $("#topicContent").show();
+                    $("#error").hide();
+                    hideEditor();
+                    break;
+                case State.CHAPTER_EDIT:
+                    $("#allTopics").hide();
+                    $("#chapterContent").show();
+                    $("#topicContent").show();
+                    $("#finishEdit").prop('disabled', false);
+                    $("#cancelEdit").prop('disabled', false);
+                    $("#error").hide();
+                    showEditor();
+                    break;
+                case State.CHAPTER_EDIT_FINISHED:
+                    $("#finishEdit").prop('disabled', false);
+                    $("#cancelEdit").prop('disabled', false);
+                    break;
+                case State.CHAPTER_EDIT_IN_PROGRSS:
+                    $("#finishEdit").prop('disabled', true);
+                    $("#cancelEdit").prop('disabled', true);
+                    break;
+                case State.ERROR:
+                    $("#allTopics").hide();
+                    $("#editLink").hide();
+                    $("#editor").hide();
+                    $("#chapterContent").hide();
+                    $("#topicContent").hide();
+                    $("#error").show();
+                    $("#errorDetails").text(errorTechDetails);
+                    break;
+                default:
+                    console.error("Invalid state: " + state);
+                    break;
+            }
+        }
+
+        function clearChapterContent() {
+            chapterName.value = "";
+            $("#markdownInput").val("");
+            render();
+        }
+
+        //End: Helper Methods
+
+        //Courtsey: https://github.com/mathjax/MathJax-examples/blob/master/MathJax-base/sample-dynamic-2.html
+        var Preview = {
+            delay: 150, // delay after keystroke before updating
+            preview: null, // filled in by Init below
+            buffer: null, // filled in by Init below
+            timeout: null, // store setTimout id
+            mjRunning: false, // true when MathJax is processing
+            mjPending: false, // true when a typeset has been queued
+            oldText: null, // used to check if an update is needed
+            //
+            //  Get the preview and buffer DIV's
+            //
+            Init: function() {
+                this.preview = document.getElementById("displayArea2");
+                this.buffer = document.getElementById("displayArea1");
+            },
+            //
+            //  Switch the buffer and preview, and display the right one.
+            //
+            SwapBuffers: function() {
+                var buffer = this.preview,
+                    preview = this.buffer;
+                this.buffer = buffer;
+                this.preview = preview;
+                buffer.style.visibility = "hidden";
+                buffer.style.position = "absolute";
+                preview.style.position = "relative";
+                preview.style.visibility = "visible";
+            },
+            //
+            //  This gets called when a key is pressed in the textarea.
+            //  We check if there is already a pending update and clear it if so.
+            //  Then set up an update to occur after a small delay (so if more keys
+            //    are pressed, the update won't occur until after there has been 
+            //    a pause in the typing).
+            //  The callback function is set up below, after the Preview object is set up.
+            //
+            Update: function() {
+                if (this.timeout) {
+                    clearTimeout(this.timeout);
+                }
+                this.timeout = setTimeout(this.callback, this.delay);
+            },
+            //
+            //  Creates the preview and runs MathJax on it.
+            //  If MathJax is already trying to render the code, return
+            //  If the text hasn't changed, return
+            //  Otherwise, indicate that MathJax is running, and start the
+            //    typesetting.  After it is done, call PreviewDone.
+            //  
+            CreatePreview: function() {
+                Preview.timeout = null;
+                if (this.mjPending) {
+                    return;
+                }
+                var text = document.getElementById("parsedMarkdown").innerHTML;
+                if (text === this.oldtext) {
+                    return;
+                } else if (this.mjRunning) {
+                    this.mjPending = true;
+                    MathJax.Hub.Queue(["CreatePreview", this]);
+                } else {
+                    this.buffer.innerHTML = this.oldtext = text;
+                    this.mjRunning = true;
+                    MathJax.Hub.Queue(
+                        ["Typeset", MathJax.Hub, this.buffer], ["PreviewDone", this]
+                    );
+                }
+            },
+            //
+            //  Indicate that MathJax is no longer running,
+            //  and swap the buffers to show the results.
+            //
+            PreviewDone: function() {
+                this.mjRunning = this.mjPending = false;
+                this.SwapBuffers();
+            }
+        };
+        //
+        //  Cache a callback to the CreatePreview action
+        //
+        Preview.callback = MathJax.Callback(["CreatePreview", Preview]);
+        Preview.callback.autoReset = true; // make sure it can run more than once
+
+    </script>
+</head>
+
+<body>
+    <div id="container">
+        <div id="mainContent">
+            <h1 id="heading">Apoorv's Note Viewer</h1>
+            <p><a href="./index.html">Back to home</a></p>
+            <div id="allTopics">
+                <h2>Topics</h2>
+                <div id="topics">
+                </div>
+            </div>
+            <div id="topicContent">
+                <h2>Table of Contents</h2>
+                <p>Back to <a onclick="navToTopicList()">topic list.</a></p>
+
+                <div id="chapters">
+                </div>
+                <div id="chapterContent">
+                    <hr class="seperator" />
+                    <div id="editor">
+                        <div class="help">Edit your content in <a target="_blank" href="http://daringfireball.net/projects/markdown/syntax">Markdown syntax</a>. For mathematics enclose your content in TeX syntax as follows:
+                            <ul>
+                                <li>For inline mode: <code>$...$</code></li>
+                                <li>For display mode: <code>$$...$$</code></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <label>Editor Font Size</label>
+                            <button onclick="increaseInputFontSize()">+</button>
+                            <button onclick="decreaseInputFontSize()">-</button>
+                            <br/>
+                            <label for="chapterName">Chapter Name</label>
+                            <input type="text" id="chapterName" name="chapterName" />
+                        </div>
+                        <textarea id="markdownInput" rows="10" onkeyup="render()"></textarea>
+                        <button id="finishEdit" onclick="upsertChapter()">Finish Editing</button>
+                        <button id="cancelEdit" onclick="cancelEditChapter()">Cancel Editing</button>
+                        <div id="parsedMarkdown"></div>
+
+                        <h3>How it will look:</h3>
+                    </div>
+                    <a id="editLink" onclick="state(State.CHAPTER_EDIT)">Edit</a>
+                    <div id="displayArea1"></div>
+                    <div id="displayArea2"></div>
+                </div>
+            </div>
+            <div id="error">
+                <p>We have encountered an error. You can attempt to load the last known good state by using the permlink below but depending upon the nature of the error, that link may too throw an error.</p>
+                <a id="showHideErrLink" onclick="toggleErrorMsgDetails()">Show Technical Details</a>
+                <div id="errorDetails"></div>
+            </div>
+            <hr class="seperator" />
+            <script>
+                Preview.Init();
+
+            </script>
+        </div>
+        <div id="footer">
+            <p>Site designed by <a href="http://www.khurasia.com">Apoorv Khurasia</a>.<br/> I use <a href="https://github.com/evilstreak/markdown-js">markdown-js</a> and <a href="https://www.mathjax.org/">MathJax</a> to render my notes in beautiful typography on this webpage. Visit their website to get started.<br/><a id="permlink" href="#">Permlink to this page.</a>
+            </p>
+        </div>
+    </div>
+</body>
+
+</html>
