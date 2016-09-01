@@ -9,6 +9,11 @@ unset base_url
 unset web_dest
 unset note_base_dir
 
+if [[ -z ${1+x} ]] ; then
+	echo "Usage: deploy.sh <path-to-deploy.properties-file>"
+	exit 1
+fi
+
 while IFS="=" read -r key value; do
     case "$key" in
         '#'*) ;;

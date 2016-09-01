@@ -37,7 +37,7 @@
             if (chapterParam) {
                 downloadAndDisplayChapter(chapterParam, editParam && (editParam === "true"), true);
             } else if (topicParam) {
-                downloadAndDisplayChapters(topicParam);
+                downloadAndDisplayChapters(topicParam, editParam && (editParam === "true"), true);
             } else {
                 navToTopicList();
             }
@@ -111,13 +111,19 @@
                 });
         }
 
-        function downloadAndDisplayChapters(topicChapterLink) {
+        function downloadAndDisplayChapters(topicChapterLink, edit) {
+            if (typeof(edit) === 'undefined') edit = false;
+
             //Clear content previously displayed
             clearChapterContent();
 
             httpGetAsync(topicChapterLink, function(data) {
                 var response = JSON.parse(data);
                 displayChapters(response);
+
+                if (edit) {
+                    appendChapter();
+                }
             }, function(errResponse) {
                 $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
                 state(State.ERROR, "Error retrieving list of chapters. Response from " + topicChapterLink + ":\n" + errResponse);
@@ -136,7 +142,9 @@
             state(State.TABLE_OF_CONTENTS);
         }
 
-        function downloadAndDisplayChapter(url, edit = false, updateTOC = false) {
+        function downloadAndDisplayChapter(url, edit, updateTOC) {
+            if (typeof(edit) === 'undefined') edit = false;
+            if (typeof(updateTOC) === 'undefined') updateTOC = false;
             httpGetAsync(url, function(data) {
                 var response = JSON.parse(data);
                 displayChapter(response, edit, updateTOC);
@@ -146,13 +154,17 @@
             });
         }
 
-        function displayChapter(response, edit = false, updateTOC = false) {
+        function displayChapter(response, edit, updateTOC) {
+            if (typeof(edit) === 'undefined') edit = false;
+            if (typeof(updateTOC) === 'undefined') updateTOC = false;
+
             currentChapter = response.chapter;
             currentTopic = response.chapter.topic;
             chapterName.value = currentChapter.displayName;
             var content = response.content;
             $("#markdownInput").val(content);
             render();
+
             if (!edit) {
                 state(State.CHAPTER_DISPLAY_BUT_NOT_EDIT);
             } else {
@@ -203,6 +215,8 @@
             $("#editLink").hide();
             if (currentChapter) {
                 $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]) + "&edit=true");
+            } else if (currentTopic) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]) + "&edit=true");
             }
         }
 
@@ -211,6 +225,8 @@
             $("#editLink").show();
             if (currentChapter) {
                 $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]));
+            } else if (currentTopic) {
+                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]));
             }
         }
 
@@ -280,17 +296,18 @@
 
         function toggleErrorMsgDetails() {
             if (errorDetailsVisible === false) {
-                $("#errorDetails").hide();
-                $("#showHideErrLink").text("Show Technical Details");
-                errorDetailsVisible = true;
-            } else {
                 $("#errorDetails").show();
                 $("#showHideErrLink").text("Hide Technical Details");
+                errorDetailsVisible = true;
+            } else {
+                $("#errorDetails").hide();
+                $("#showHideErrLink").text("Show Technical Details");
                 errorDetailsVisible = false;
             }
         }
 
-        function state(state, errorTechDetails = "No technical details available.") {
+        function state(state, errorTechDetails) {
+            if (typeof(errorTechDetails) === 'undefined') errorTechDetails = "No technical details available.";
             switch (state) {
                 case State.TOPICS:
                     $("#allTopics").show();
@@ -470,7 +487,7 @@
                             <label for="chapterName">Chapter Name</label>
                             <input type="text" id="chapterName" name="chapterName" />
                         </div>
-                        <textarea id="markdownInput" rows="10" onkeyup="render()"></textarea>
+                        <textarea id="markdownInput" onkeyup="render()"></textarea>
                         <button id="finishEdit" onclick="upsertChapter()">Finish Editing</button>
                         <button id="cancelEdit" onclick="cancelEditChapter()">Cancel Editing</button>
                         <div id="parsedMarkdown"></div>
