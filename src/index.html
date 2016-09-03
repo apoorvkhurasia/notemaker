@@ -10,7 +10,7 @@
     <script type="text/x-mathjax-config">
         MathJax.Hub.Config({ showProcessingMessages: false, tex2jax: { inlineMath: [['$','$']] } });
     </script>
-    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS_CHTML"></script>
+    <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <script type="text/javascript" src="./lib/main.js"></script>
     <script type="text/javascript" src="./lib/jquery-3.1.0.min.js"></script>
     <script type="text/javascript" src="./lib/markdown.min.js"></script>
@@ -24,7 +24,7 @@
             CHAPTER_EDIT_IN_PROGRSS: "chapter-edit-in-progress"
         };
 
-        var errorDetailsVisible = false;
+        var errorDetailsVisible = true;
         var currentTopic = null;
         var currentChapter = null;
 
@@ -45,7 +45,7 @@
 
         //Navigation Methods
         function navToTopicList() {
-            httpGetAsync("__NORMAL_BASE_URL__/server/reslookup.php",
+            httpGetAsync("__BASE_URL__/server/reslookup.php",
                 function(data) {
                     var topicListResp = JSON.parse(data);
                     var topicListElem = document.createElement("ul");
@@ -79,7 +79,7 @@
                         createNewTopicBtn.setAttribute("disabled", true);
 
                         var request = $.ajax({
-                            url: "__ADMIN_BASE_URL__/server/admin/insertTopic.php",
+                            url: "__BASE_URL__/server/admin/insertTopic.php",
                             type: "post",
                             data: form
                         });
@@ -102,12 +102,12 @@
                     newTopicCreateForm.appendChild(createNewTopicBtn);
                     topicListElem.appendChild(newTopicCreateForm);
                     appendAsOnlyChild("#topics", topicListElem);
-                    $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                    $("#permlink").attr("href", "__BASE_URL__/index.html");
                     state(State.TOPICS);
                 },
                 function(errResp) {
-                    $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
-                    state(State.ERROR, "Error retrieving list of topics. Response from __NORMAL_BASE_URL__/server/reslookup.php:\n" + errResp);
+                    $("#permlink").attr("href", "__BASE_URL__/index.html");
+                    state(State.ERROR, "Error retrieving list of topics. Response from __BASE_URL__/server/reslookup.php:\n" + errResp);
                 });
         }
 
@@ -125,7 +125,7 @@
                     appendChapter();
                 }
             }, function(errResponse) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                $("#permlink").attr("href", "__BASE_URL__/index.html");
                 state(State.ERROR, "Error retrieving list of chapters. Response from " + topicChapterLink + ":\n" + errResponse);
             });
         }
@@ -149,7 +149,7 @@
                 var response = JSON.parse(data);
                 displayChapter(response, edit, updateTOC);
             }, function(errResp) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html");
+                $("#permlink").attr("href", "__BASE_URL__/index.html");
                 state(State.ERROR, "Error retrieving chapter contents. Response from " + url + ":\n" + errResp);
             });
         }
@@ -214,9 +214,9 @@
             $("#editor").show();
             $("#editLink").hide();
             if (currentChapter) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]) + "&edit=true");
+                $("#permlink").attr("href", "__BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]) + "&edit=true");
             } else if (currentTopic) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]) + "&edit=true");
+                $("#permlink").attr("href", "__BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]) + "&edit=true");
             }
         }
 
@@ -224,15 +224,16 @@
             $("#editor").hide();
             $("#editLink").show();
             if (currentChapter) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]));
+                $("#permlink").attr("href", "__BASE_URL__/index.html?chapter=" + encodeURIComponent(currentChapter.links["get_content"]));
             } else if (currentTopic) {
-                $("#permlink").attr("href", "__NORMAL_BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]));
+                $("#permlink").attr("href", "__BASE_URL__/index.html?topic=" + encodeURIComponent(currentTopic.links["get_chapters"]));
             }
         }
 
         function render() {
             var markdownInput = document.getElementById("markdownInput");
-            var parsedHTML = markdown.toHTML($("#markdownInput").val());
+            var underScoreEscapedMarkdown = replaceAll($("#markdownInput").val(), "_", "\\_");
+            var parsedHTML = markdown.toHTML(underScoreEscapedMarkdown);
             $("#parsedMarkdown").html(parsedHTML);
             Preview.Update();
         }
@@ -261,7 +262,7 @@
             state(State.CHAPTER_EDIT_IN_PROGRSS);
 
             var request = $.ajax({
-                url: "__ADMIN_BASE_URL__/server/admin/insert.php",
+                url: "__BASE_URL__/server/admin/insert.php",
                 type: "post",
                 data: form
             });
@@ -294,15 +295,23 @@
             }
         }
 
+        function showErrorDetails() {
+            $("#errorDetails").show();
+            $("#showHideErrLink").text("Hide Technical Details");
+            errorDetailsVisible = true;
+        }
+
+        function hideErrorDetails() {
+            $("#errorDetails").hide();
+            $("#showHideErrLink").text("Show Technical Details");
+            errorDetailsVisible = false;
+        }
+
         function toggleErrorMsgDetails() {
             if (errorDetailsVisible === false) {
-                $("#errorDetails").show();
-                $("#showHideErrLink").text("Hide Technical Details");
-                errorDetailsVisible = true;
+                showErrorDetails();
             } else {
-                $("#errorDetails").hide();
-                $("#showHideErrLink").text("Show Technical Details");
-                errorDetailsVisible = false;
+                hideErrorDetails();
             }
         }
 
@@ -350,8 +359,9 @@
                     $("#editor").hide();
                     $("#chapterContent").hide();
                     $("#topicContent").hide();
-                    $("#error").show();
                     $("#errorDetails").text(errorTechDetails);
+                    hideErrorDetails();
+                    $("#error").show();
                     break;
                 default:
                     console.error("Invalid state: " + state);
@@ -473,7 +483,8 @@
                 <div id="chapterContent">
                     <hr class="seperator" />
                     <div id="editor">
-                        <div class="help">Edit your content in <a target="_blank" href="http://daringfireball.net/projects/markdown/syntax">Markdown syntax</a>. For mathematics enclose your content in TeX syntax as follows:
+                        <div class="help">
+                            Edit your content in <a target="_blank" href="http://daringfireball.net/projects/markdown/syntax">Markdown syntax</a>. For compatibility with TeX _ will be escaped automatically. To make text italic or bold please use * instead. For mathematics enclose your content in TeX syntax as follows:
                             <ul>
                                 <li>For inline mode: <code>$...$</code></li>
                                 <li>For display mode: <code>$$...$$</code></li>

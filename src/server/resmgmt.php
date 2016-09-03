@@ -61,7 +61,7 @@ function getAllTopics() {
        });
     $resp = new stdClass();
     $resp->topics = $topics;
-    $resp->links = array("self" => "__NORMAL_BASE_URL__/server/reslookup.php");
+    $resp->links = array("self" => "__BASE_URL__/server/reslookup.php");
     return json_encode($resp);
 }
 
@@ -71,7 +71,7 @@ function getTopic($topicKey) {
     $resp = new stdClass();
     $resp->topic = new Topic($topicKey);
     $resp->chapters = getChapters($topicKey);
-    $resp->links = array("self" => "__NORMAL_BASE_URL__/server/reslookup.php?topic=$topicKey");
+    $resp->links = array("self" => "__BASE_URL__/server/reslookup.php?topic=$topicKey");
     return json_encode($resp);
 } 
 
@@ -82,7 +82,7 @@ function getChapter($topicKey, $chapterKey) {
     $resp->allChapters = getChapters($topicKey);
     $resp->chapter = new Chapter(new Topic($topicKey), $chapterKey);
     $resp->content = $chapterContents;
-    $resp->links = array("self" => "__NORMAL_BASE_URL__/server/reslookup.php?topic=$topicKey&chapter=$chapterFile");
+    $resp->links = array("self" => "__BASE_URL__/server/reslookup.php?topic=$topicKey&chapter=$chapterFile");
     return json_encode($resp);
 }
 
@@ -110,7 +110,7 @@ class Topic extends LinkAware {
         parent::__construct();
         $this->topicKey = $topicKey;
         $this->displayName = str_replace(".", " ", $topicKey);
-        $this->addLink("get_chapters", "__NORMAL_BASE_URL__/server/reslookup.php?topic=$topicKey");
+        $this->addLink("get_chapters", "__BASE_URL__/server/reslookup.php?topic=$topicKey");
     }
     
 }
@@ -131,7 +131,7 @@ class Chapter extends LinkAware {
         $this->displayName = implode(" ", array_splice($keyParts, 1, sizeof($keyParts) - 2));
         
         $topicKey = $topic->topicKey;
-        $this->addLink("get_content", "__NORMAL_BASE_URL__/server/reslookup.php?topic=$topicKey&chapter=$chapterKey");
+        $this->addLink("get_content", "__BASE_URL__/server/reslookup.php?topic=$topicKey&chapter=$chapterKey");
     }
 }
 

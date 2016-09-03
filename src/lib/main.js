@@ -40,6 +40,10 @@ function toggleContentVisibility(contentDiv, hideableContents) {
     });
 }
 
+function replaceAll(haystack, needle, replacementNeedle) {
+    return haystack.replace(new RegExp(needle, 'g'), replacementNeedle);
+}
+
 //Courtsey: http://stackoverflow.com/a/901144
 function getParameterByName(name, url) {
     if (!url) url = window.location.href;

@@ -9,6 +9,6 @@ fi
 
 build_dir=$1
 
-tar czvf website.tar src deploy.sh dev.deploy.properties prod.deploy.properties
+tar czvf website.tar src deploy.sh 
 mkdir -p $build_dir
 mv website.tar $build_dir
