@@ -49,8 +49,6 @@ body {
     margin-right: auto;
     border: 0.1em solid;
     padding: 1em;
-    visibility: hidden;
-    position: absolute;
 }
 
 #container {

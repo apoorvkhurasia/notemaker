@@ -392,6 +392,9 @@
             Init: function() {
                 this.preview = document.getElementById("displayArea2");
                 this.buffer = document.getElementById("displayArea1");
+
+                $("#displayArea1").show();
+                $("#displayArea2").hide();
             },
             //
             //  Switch the buffer and preview, and display the right one.
@@ -401,10 +404,8 @@
                     preview = this.buffer;
                 this.buffer = buffer;
                 this.preview = preview;
-                buffer.style.visibility = "hidden";
-                buffer.style.position = "absolute";
-                preview.style.position = "relative";
-                preview.style.visibility = "visible";
+                $("#" + this.buffer.id).hide();
+                $("#" + this.preview.id).show();
             },
             //
             //  This gets called when a key is pressed in the textarea.
